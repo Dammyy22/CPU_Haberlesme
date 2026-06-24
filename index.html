@@ -24,7 +24,7 @@
             position: relative; 
             border: 3px dashed #7f8fa6;
             box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
-            touch-action: none; /* Mobilde sayfa kaymasını engeller */
+            touch-action: none;
         }
         h1 { margin-bottom: 5px; font-size: 24px; }
         p { color: #a4b0be; margin-top: 0; }
@@ -40,7 +40,7 @@
             <div class='value speed-value' id='v_motor_hiz'>0 %</div>
         </div>
         <div class='card'>
-            <h3>Sıcaklik (Ana)</h3>
+            <h3>Sıcaklık (Ana)</h3>
             <div class='value' id='v_sicaklik'>-- °C</div>
         </div>
         <div class='card'>
@@ -50,7 +50,7 @@
     </div>
 
     <div id="joystick-zone"></div>
-    <p style="font-size: 14px; color: #7f8fa6;">Hızı değiştirmek için joystick'i yukarı/aşağı oynatın.</p>
+    <p style="font-size: 14px; color: #7f8fa6;">Hızı değiştirmek için joystick'i yukarı oynatın.</p>
 
     <script>
         const firebaseConfig = {
@@ -60,20 +60,19 @@
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
 
-        // Buluttan verileri anlık oku
+        // Verileri anlık okuma
         database.ref('plc_data').on('value', (snapshot) => {
             const data = snapshot.val();
             if(data) {
-                document.getElementById('v_sicaklik').innerText = (data.sicaklik || 0) + ' °C';
-                document.getElementById('v_hacim').innerText = (data.hacim || 0) + ' L';
-                // PLC'den geri dönen mevcut motor hızını göster
+                document.getElementById('v_sicaklik').innerText = (data.sicaklik !== undefined ? data.sicaklik : 0) + ' °C';
+                document.getElementById('v_hacim').innerText = (data.hacim !== undefined ? data.hacim : 0) + ' L';
                 if(data.motor_hizi !== undefined) {
                     document.getElementById('v_motor_hiz').innerText = data.motor_hizi + ' %';
                 }
             }
         });
 
-        // JOYSTICK KURULUMU
+        // Joystick Kurulumu
         const joystickZone = document.getElementById('joystick-zone');
         const manager = nipplejs.create({
             zone: joystickZone,
@@ -89,31 +88,26 @@
         manager.on('move', (evt, data) => {
             if (!data.distance || !data.direction) return;
 
-            // Vektörel uzaklığı 0-100 arası hız yüzdesine çeviriyoruz
-            // Sadece yukarı harekette hız artsın, bırakınca veya aşağıda sıfırlansın mantığı:
             let yonCarpani = (data.direction.y === 'up') ? 1 : -1;
             let hesaplananHiz = Math.round((data.distance / 65) * 100); 
             if(yonCarpani === -1 || hesaplananHiz < 0) hesaplananHiz = 0;
             if(hesaplananHiz > 100) hesaplananHiz = 100;
 
-            // Gereksiz ağ trafiğini engellemek için hız değiştiyse ve kilit yoksa buluta bas
             if (hesaplananHiz !== sonGonderilenHiz && !komutGonderimKilitli) {
                 sonGonderilenHiz = hesaplananHiz;
                 komutGonderimKilitli = true;
 
-                // Hız verisini Offset 8'e yazacağız (PLC'de DB1.DBW8 olarak düşünebilirsin)
                 database.ref('plc_commands').set({
                     offset: 8, 
                     val: hesaplananHiz,
                     timestamp: Date.now()
                 });
 
-                // Bulutu spamlememek için saniyede en fazla 5-10 istek sınırı koyuyoruz (200ms kilit)
-                setTimeout(() => { komutGonderimKilitli = false; }, 150;
+                // Kapatılmayan parantez hatası burada düzeltildi:
+                setTimeout(() => { komutGonderimKilitli = false; }, 150);
             }
         });
 
-        // Joystick bırakıldığında motoru güvenle durdur (0 yap)
         manager.on('end', () => {
             sonGonderilenHiz = 0;
             database.ref('plc_commands').set({
