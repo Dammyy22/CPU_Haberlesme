@@ -5,84 +5,123 @@
     <title>Firebase Cloud SCADA Paneli</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js"></script>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1e272e; color: #f5f6fa; text-align: center; padding:20px; }
-        .container { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; margin-top: 30px; }
-        .card { background: #2f3640; border-radius: 12px; padding: 25px; width: 220px; box-shadow: 0 6px 12px rgba(0,0,0,0.3); border: 1px solid #444; }
-        .value { font-size: 32px; font-weight: bold; color: #00a8ff; margin: 15px 0; font-family: monospace; }
-        input { padding: 8px; width: 80%; border-radius: 6px; border: 1px solid #718093; background: #353b48; color: white; text-align: center; font-size: 16px; }
-        button { padding: 10px; margin-top: 12px; width: 85%; border-radius: 6px; border: none; background: #4cd137; color: white; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 14px; }
-        button:hover { background: #44bd32; }
-        h3 { margin: 0; color: #dcdde1; font-size: 18px; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1e272e; color: #f5f6fa; text-align: center; padding:20px; user-select: none; }
+        .container { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; margin-top: 20px; }
+        .card { background: #2f3640; border-radius: 12px; padding: 20px; width: 200px; box-shadow: 0 6px 12px rgba(0,0,0,0.3); border: 1px solid #444; }
+        .value { font-size: 28px; font-weight: bold; color: #00a8ff; margin: 10px 0; font-family: monospace; }
+        .speed-card { background: #2c3e50; border: 2px solid #e1b12c; }
+        .speed-value { color: #e1b12c; font-size: 36px; }
+        
+        /* Joystick Alanı Tasarımı */
+        #joystick-zone { 
+            width: 200px; 
+            height: 200px; 
+            background: #353b48; 
+            border-radius: 50%; 
+            margin: 30px auto; 
+            position: relative; 
+            border: 3px dashed #7f8fa6;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+            touch-action: none; /* Mobilde sayfa kaymasını engeller */
+        }
+        h1 { margin-bottom: 5px; font-size: 24px; }
+        p { color: #a4b0be; margin-top: 0; }
     </style>
 </head>
 <body>
-    <h1>BULUT PLC SCADA PANELİ</h1>
-    <p>Veriler Firebase Bulut Veritabanı Üzerinden Dünyanın Her Yerine Anlık Akmaktadır.</p>
+    <h1>BULUT PLC SCADA & JOYSTICK PANELİ</h1>
+    <p>Joystick hareketleri anlık olarak PLC Motor Hızına aktarılır.</p>
     
     <div class='container'>
+        <div class='card speed-card'>
+            <h3>Hedef Motor Hızı</h3>
+            <div class='value speed-value' id='v_motor_hiz'>0 %</div>
+        </div>
         <div class='card'>
-            <h3>Sıcaklık (Ana)</h3>
+            <h3>Sıcaklik (Ana)</h3>
             <div class='value' id='v_sicaklik'>-- °C</div>
-            <input type='number' id='i_sicaklik' placeholder='Yeni Değer'>
-            <button onclick='veriYaz("sicaklik", 0)'>Buluttan Yaz</button>
         </div>
         <div class='card'>
             <h3>Hacim (Ana)</h3>
             <div class='value' id='v_hacim'>-- L</div>
-            <input type='number' id='i_hacim' placeholder='Yeni Değer'>
-            <button onclick='veriYaz("hacim", 2)'>Buluttan Yaz</button>
-        </div>
-        <div class='card'>
-            <h3>Sıcaklık 1</h3>
-            <div class='value' id='v_sicaklik_1'>-- °C</div>
-            <input type='number' id='i_sicaklik_1' placeholder='Yeni Değer'>
-            <button onclick='veriYaz("sicaklik_1", 4)'>Buluttan Yaz</button>
-        </div>
-        <div class='card'>
-            <h3>Hacim 1</h3>
-            <div class='value' id='v_hacim_1'>-- L</div>
-            <input type='number' id='i_hacim_1' placeholder='Yeni Değer'>
-            <button onclick='veriYaz("hacim_1", 6)'>Buluttan Yaz</button>
         </div>
     </div>
 
+    <div id="joystick-zone"></div>
+    <p style="font-size: 14px; color: #7f8fa6;">Hızı değiştirmek için joystick'i yukarı/aşağı oynatın.</p>
+
     <script>
-        // Senin Firebase URL'in buraya entegre edildi
         const firebaseConfig = {
             databaseURL: "https://plc-scada-de5ef-default-rtdb.firebaseio.com/" 
         };
         
-        // Firebase Başlatılıyor
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
 
-        // Bulut Veritabanını Anlık Dinleme Mekanizması
+        // Buluttan verileri anlık oku
         database.ref('plc_data').on('value', (snapshot) => {
             const data = snapshot.val();
             if(data) {
-                document.getElementById('v_sicaklik').innerText = (data.sicaklik !== undefined ? data.sicaklik : 0) + ' °C';
-                document.getElementById('v_hacim').innerText = (data.hacim !== undefined ? data.hacim : 0) + ' L';
-                document.getElementById('v_sicaklik_1').innerText = (data.sicaklik_1 !== undefined ? data.sicaklik_1 : 0) + ' °C';
-                document.getElementById('v_hacim_1').innerText = (data.hacim_1 !== undefined ? data.hacim_1 : 0) + ' L';
+                document.getElementById('v_sicaklik').innerText = (data.sicaklik || 0) + ' °C';
+                document.getElementById('v_hacim').innerText = (data.hacim || 0) + ' L';
+                // PLC'den geri dönen mevcut motor hızını göster
+                if(data.motor_hizi !== undefined) {
+                    document.getElementById('v_motor_hiz').innerText = data.motor_hizi + ' %';
+                }
             }
         });
 
-        // Butona basıldığında komutu bulut kuyruğuna yazma fonksiyonu
-        function veriYaz(key, offset) {
-            let inputId = 'i_' + key;
-            let deger = document.getElementById(inputId).value;
-            if(deger === "") { alert("Lütfen bir değer girin!"); return; }
-            
+        // JOYSTICK KURULUMU
+        const joystickZone = document.getElementById('joystick-zone');
+        const manager = nipplejs.create({
+            zone: joystickZone,
+            mode: 'static',
+            position: { left: '50%', top: '50%' },
+            color: '#e1b12c',
+            size: 130
+        });
+
+        let sonGonderilenHiz = 0;
+        let komutGonderimKilitli = false;
+
+        manager.on('move', (evt, data) => {
+            if (!data.distance || !data.direction) return;
+
+            // Vektörel uzaklığı 0-100 arası hız yüzdesine çeviriyoruz
+            // Sadece yukarı harekette hız artsın, bırakınca veya aşağıda sıfırlansın mantığı:
+            let yonCarpani = (data.direction.y === 'up') ? 1 : -1;
+            let hesaplananHiz = Math.round((data.distance / 65) * 100); 
+            if(yonCarpani === -1 || hesaplananHiz < 0) hesaplananHiz = 0;
+            if(hesaplananHiz > 100) hesaplananHiz = 100;
+
+            // Gereksiz ağ trafiğini engellemek için hız değiştiyse ve kilit yoksa buluta bas
+            if (hesaplananHiz !== sonGonderilenHiz && !komutGonderimKilitli) {
+                sonGonderilenHiz = hesaplananHiz;
+                komutGonderimKilitli = true;
+
+                // Hız verisini Offset 8'e yazacağız (PLC'de DB1.DBW8 olarak düşünebilirsin)
+                database.ref('plc_commands').set({
+                    offset: 8, 
+                    val: hesaplananHiz,
+                    timestamp: Date.now()
+                });
+
+                // Bulutu spamlememek için saniyede en fazla 5-10 istek sınırı koyuyoruz (200ms kilit)
+                setTimeout(() => { komutGonderimKilitli = false; }, 150;
+            }
+        });
+
+        // Joystick bırakıldığında motoru güvenle durdur (0 yap)
+        manager.on('end', () => {
+            sonGonderilenHiz = 0;
             database.ref('plc_commands').set({
-                offset: offset,
-                val: parseInt(deger),
+                offset: 8,
+                val: 0,
                 timestamp: Date.now()
-            }).then(() => {
-                alert("Yazma komutu buluta gönderildi. PC backend'i PLC'ye işleyecek.");
-                document.getElementById(inputId).value = "";
             });
-        }
+        });
     </script>
 </body>
 </html>
