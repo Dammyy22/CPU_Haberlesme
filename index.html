@@ -2,7 +2,9 @@
 <html>
 <head>
     <meta charset='utf-8'>
-    <title>GitHub Uzak SCADA Paneli</title>
+    <title>Firebase Cloud SCADA Paneli</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1e272e; color: #f5f6fa; text-align: center; padding:20px; }
         .container { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; margin-top: 30px; }
@@ -12,76 +14,74 @@
         button { padding: 10px; margin-top: 12px; width: 85%; border-radius: 6px; border: none; background: #4cd137; color: white; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 14px; }
         button:hover { background: #44bd32; }
         h3 { margin: 0; color: #dcdde1; font-size: 18px; }
-        .config { margin-bottom: 20px; background: #3d3d3d; padding: 10px; display: inline-block; border-radius: 8px; }
     </style>
 </head>
 <body>
-    <h1>GITHUB UZAK PLC SCADA PANELİ</h1>
-    <p>Arayüz GitHub sunucularında, Veri motoru senin yerel bilgisayarında çalışıyor.</p>
+    <h1>BULUT PLC SCADA PANELİ</h1>
+    <p>Veriler Firebase Bulut Veritabanı Üzerinden Dünyanın Her Yerine Anlık Akmaktadır.</p>
     
-    <div class="config">
-        <label>C++ Sunucu IP Adresi: </label>
-        <input type="text" id="server_ip" value="localhost" style="width: 150px; padding: 4px;"> :18080
-    </div>
-
     <div class='container'>
         <div class='card'>
             <h3>Sıcaklık (Ana)</h3>
-            <div class='value' id='v_sicaklik'>0 °C</div>
+            <div class='value' id='v_sicaklik'>-- °C</div>
             <input type='number' id='i_sicaklik' placeholder='Yeni Değer'>
-            <button onclick='veriYaz(0)'>Uzak Yaz</button>
+            <button onclick='veriYaz("sicaklik", 0)'>Buluttan Yaz</button>
         </div>
         <div class='card'>
             <h3>Hacim (Ana)</h3>
-            <div class='value' id='v_hacim'>0 L</div>
+            <div class='value' id='v_hacim'>-- L</div>
             <input type='number' id='i_hacim' placeholder='Yeni Değer'>
-            <button onclick='veriYaz(2)'>Uzak Yaz</button>
+            <button onclick='veriYaz("hacim", 2)'>Buluttan Yaz</button>
         </div>
         <div class='card'>
             <h3>Sıcaklık 1</h3>
-            <div class='value' id='v_sicaklik_1'>0 °C</div>
+            <div class='value' id='v_sicaklik_1'>-- °C</div>
             <input type='number' id='i_sicaklik_1' placeholder='Yeni Değer'>
-            <button onclick='veriYaz(4)'>Uzak Yaz</button>
+            <button onclick='veriYaz("sicaklik_1", 4)'>Buluttan Yaz</button>
         </div>
         <div class='card'>
             <h3>Hacim 1</h3>
-            <div class='value' id='v_hacim_1'>0 L</div>
+            <div class='value' id='v_hacim_1'>-- L</div>
             <input type='number' id='i_hacim_1' placeholder='Yeni Değer'>
-            <button onclick='veriYaz(6)'>Uzak Yaz</button>
+            <button onclick='veriYaz("hacim_1", 6)'>Buluttan Yaz</button>
         </div>
     </div>
 
     <script>
-        // Dinamik olarak inputtaki IP adresine göre API URL'sini oluşturur
-        function getApiUrl() {
-            let ip = document.getElementById('server_ip').value;
-            return `http://${ip}:18080`;
-        }
+        // Senin Firebase URL'in buraya entegre edildi
+        const firebaseConfig = {
+            databaseURL: "https://plc-scada-de5ef-default-rtdb.firebaseio.com/" 
+        };
+        
+        // Firebase Başlatılıyor
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
 
-        // GitHub sayfası, girilen yerel IP üzerinden bilgisayarındaki C++ backendini sorgular
-        setInterval(() => {
-            fetch(`${getApiUrl()}/api/data`)
-                .then(res => res.json())
-                .then(data => {
-                    document.getElementById('v_sicaklik').innerText = data.sicaklik + ' °C';
-                    document.getElementById('v_hacim').innerText = data.hacim + ' L';
-                    document.getElementById('v_sicaklik_1').innerText = data.sicaklik_1 + ' °C';
-                    document.getElementById('v_hacim_1').innerText = data.hacim_1 + ' L';
-                }).catch(err => console.log("Yerel sunucuya ulasilamiyor..."));
-        }, 1000);
+        // Bulut Veritabanını Anlık Dinleme Mekanizması
+        database.ref('plc_data').on('value', (snapshot) => {
+            const data = snapshot.val();
+            if(data) {
+                document.getElementById('v_sicaklik').innerText = (data.sicaklik !== undefined ? data.sicaklik : 0) + ' °C';
+                document.getElementById('v_hacim').innerText = (data.hacim !== undefined ? data.hacim : 0) + ' L';
+                document.getElementById('v_sicaklik_1').innerText = (data.sicaklik_1 !== undefined ? data.sicaklik_1 : 0) + ' °C';
+                document.getElementById('v_hacim_1').innerText = (data.hacim_1 !== undefined ? data.hacim_1 : 0) + ' L';
+            }
+        });
 
-        function veriYaz(offset) {
-            let map = {0: 'i_sicaklik', 2: 'i_hacim', 4: 'i_sicaklik_1', 6: 'i_hacim_1'};
-            let inputId = map[offset];
+        // Butona basıldığında komutu bulut kuyruğuna yazma fonksiyonu
+        function veriYaz(key, offset) {
+            let inputId = 'i_' + key;
             let deger = document.getElementById(inputId).value;
             if(deger === "") { alert("Lütfen bir değer girin!"); return; }
             
-            fetch(`${getApiUrl()}/api/write?offset=${offset}&val=${deger}`)
-                .then(res => res.text())
-                .then(msg => {
-                    alert(msg);
-                    document.getElementById(inputId).value = "";
-                }).catch(err => alert("Yazma istegi yerel bilgisayara ulasamadi. CORS veya IP hatasi!"));
+            database.ref('plc_commands').set({
+                offset: offset,
+                val: parseInt(deger),
+                timestamp: Date.now()
+            }).then(() => {
+                alert("Yazma komutu buluta gönderildi. PC backend'i PLC'ye işleyecek.");
+                document.getElementById(inputId).value = "";
+            });
         }
     </script>
 </body>
